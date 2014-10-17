@@ -2,32 +2,8 @@
 #include <stdlib.h>
 #include "SDL/SDL.h"
 #include "SDL/SDL_keysym.h"
-#include "SDL/SDL_gfxPrimitives.h"
-#define dopcode memory[pc] << 8 | memory[pc + 1]
-#define X       (opcode & 0x0F00) >> 8
-#define Y       (opcode & 0x00F0) >> 4
-#define DX      (px * SCALE)
-#define DY      (py * SCALE)
-#define R       (rand() % 256)
-#define N       (opcode & 0x000F)
-#define KK      (opcode & 0x00FF)
-#define NNN     (opcode & 0x0FFF)
-#define SCALE   5
-#define WIDTH   64
-#define HEIGHT  32
-#define INST_PER_CYCLE 5
-
-unsigned char memory[4096];
-char gfx[32][64];
-int pc = 0x200;
-unsigned int I = 0;
-unsigned char V[16];
-int opcode, inst, kk, x, y, px, py, i, ii, temp, cinst;
-char color, ccolor, running, paused, debug, space_pressed;
-unsigned char sp;
-int DT, ST;
-int stack[16];
-int keys[16];
+#include "chip8.h"
+#include "time.h"
 
 void load_rom(FILE* fp, int start) {
     int c, i;
@@ -37,10 +13,30 @@ void load_rom(FILE* fp, int start) {
 }
 
 void beep() {
-    printf("BEEP!\n");
+    if (sound)
+        printf("BEEP!\n");
 }
 
 main(int argc, char* argv[]) {
+    /* Parse command line arguments */
+    if (argc != 2) {
+        fprintf(stderr, "usage: chip8 ROM\n");
+        exit(-1);
+    }
+    
+    /* Load ROM */
+    FILE* fp = fopen(argv[1], "rb");
+    if (!fp) {
+        fprintf(stderr, "error: failed to open file: %s\n", argv[1]);
+        exit(-1);
+    }
+    load_rom(fp, 0x200);
+    fclose(fp);
+    
+    /* Load hex font */
+    for (temp=0; temp < 80; temp++) memory[temp] = chip8_font[temp];
+    
+    /* Init SDL */
     int SX, SY;
     SX = SCALE * WIDTH;
     SY = SCALE * HEIGHT;
@@ -50,6 +46,7 @@ main(int argc, char* argv[]) {
         exit(-1);
     }
     SDL_Surface* screen;
+    SDL_Rect bounds;
     if (!(screen = SDL_SetVideoMode(SX, SY, 0, SDL_SWSURFACE))) {
         fprintf(stderr, "Could not set video mode: %s\n", SDL_GetError());
         exit(-1);
@@ -58,14 +55,7 @@ main(int argc, char* argv[]) {
     SDL_WM_SetCaption("CHIP8 emulator - running", 0);
     SDL_EnableUNICODE(1);
     
-    FILE* fp = fopen(argv[1], "rb");
-    load_rom(fp, 0x200);
-    fclose(fp);
-    
-    fp = fopen("FONTS.ch8", "rb");
-    load_rom(fp, 0);
-    fclose(fp);
-    
+    /* Setup some variables */
     running = 1;
     char* keyname;
     char chr;
@@ -79,125 +69,123 @@ main(int argc, char* argv[]) {
                     break;
                 case (SDL_KEYDOWN):
                     key = SDL_GetKeyName(event.key.keysym.sym);
-                    if (strlen(key) > 1) {
-                        if (!strcmp(key, "space")) {
-                            // Next instruction
-                            if (paused) {
-                                space_pressed = 1;
-                                SDL_Delay(250); /* Incase you want to 
-                                    execute just one opcode */
-                            }
-                        }
-                        break;
-                    }
+                    if (strlen(key) > 1) break;
                     chr = key[0];
                     switch(chr) {
-                        case '1':
-                        case '2':
-                        case '3':
-                        case '4':
-                            keys[chr - '0' - 1] = 1;
+                        case KEY_1:
+                            keys[0] = 1;
+                            break;
+                        case KEY_2:
+                            keys[1] = 1;
+                            break;
+                        case KEY_3:
+                            keys[2] = 1;
+                            break;
+                        case KEY_C:
+                            keys[3] = 1;
                             break;
                             
-                        case 'q':
+                        case KEY_4:
                             keys[4] = 1;
                             break;
-                        case 'w':
+                        case KEY_5:
                             keys[5] = 1;
                             break;
-                        case 'e':
+                        case KEY_6:
                             keys[6] = 1;
                             break;
-                        case 'r':
+                        case KEY_D:
                             keys[7] = 1;
                             break;
                             
-                        case 'a':
+                        case KEY_7:
                             keys[8] = 1;
                             break;
-                        case 's':
+                        case KEY_8:
                             keys[9] = 1;
                             break;
-                        case 'd':
+                        case KEY_9:
                             keys[10] = 1;
                             break;
-                        case 'f':
+                        case KEY_E:
                             keys[11] = 1;
                             break;
                             
-                        case 'z':
+                        case KEY_A:
                             keys[12] = 1;
                             break;
-                        case 'x':
+                        case KEY_0:
                             keys[13] = 1;
                             break;
-                        case 'c':
+                        case KEY_B:
                             keys[14] = 1;
                             break;
-                        case 'v':
+                        case KEY_F:
                             keys[15] = 1;
                             break;
+                        
+                        case KEY_NEXT_OPCODE:
+                            next_opcode = 1;
+                            SDL_Delay(250);
                     }
                     break;
                 case (SDL_KEYUP):
                     key = SDL_GetKeyName(event.key.keysym.sym);
-                    if (strlen(key) > 1) {
-                        if (!strcmp(key, "space")) {
-                            // Next instruction
-                            if (paused) {
-                                space_pressed = 0;
-                                SDL_Delay(2);
-                            }
-                        }
-                        break;
-                    }
+                    if (strlen(key) > 1) break;
                     chr = key[0];
                     switch(chr) {
-                        case '1':
-                        case '2':
-                        case '3':
-                        case '4':
-                            keys[chr - '0' - 1] = 0;
+                        case KEY_1:
+                            keys[0] = 0;
+                            break;
+                        case KEY_2:
+                            keys[1] = 0;
+                            break;
+                        case KEY_3:
+                            keys[2] = 0;
+                            break;
+                        case KEY_C:
+                            keys[3] = 0;
                             break;
                             
-                        case 'q':
+                        case KEY_4:
                             keys[4] = 0;
-                        case 'w':
+                            break;
+                        case KEY_5:
                             keys[5] = 0;
                             break;
-                        case 'e':
+                        case KEY_6:
                             keys[6] = 0;
                             break;
-                        case 'r':
+                        case KEY_D:
                             keys[7] = 0;
                             break;
                             
-                        case 'a':
+                        case KEY_7:
                             keys[8] = 0;
                             break;
-                        case 's':
+                        case KEY_8:
                             keys[9] = 0;
                             break;
-                        case 'd':
+                        case KEY_9:
                             keys[10] = 0;
                             break;
-                        case 'f':
+                        case KEY_E:
                             keys[11] = 0;
                             break;
                             
-                        case 'z':
+                        case KEY_A:
                             keys[12] = 0;
                             break;
-                        case 'x':
+                        case KEY_0:
                             keys[13] = 0;
                             break;
-                        case 'c':
+                        case KEY_B:
                             keys[14] = 0;
                             break;
-                        case 'v':
+                        case KEY_F:
                             keys[15] = 0;
                             break;
-                        case 'p':
+                        case KEY_PAUSE:
                             // Pause
                             paused = !paused;
                             if (paused) {
@@ -211,11 +199,37 @@ main(int argc, char* argv[]) {
                                 cinst = INST_PER_CYCLE;
                             }
                             break;
-                        case 'b':
+                        case KEY_NEXT_OPCODE:
+                            if (paused) {
+                                next_opcode = 0;
+                                SDL_Delay(2);
+                            }
+                            break;
+                        case KEY_DEBUG:
                             // Debug
                             debug = !debug;
+                            if (debug)
+                                printf("Debugging: ON\n");
+                            else
+                                printf("Debugging: OFF\n");
                             break;
-                        case 'h':
+                        case KEY_INFO:
+                            // Print info
+                            for (temp=0; temp<16; temp++) {
+                                printf("V%-2d ", temp);
+                            }
+                            printf("\n");
+                            for (temp=0; temp<16; temp++) {
+                                printf("%-3d ", V[temp]);
+                            }
+                            printf("\n");
+                            printf("I: %d\n", I);
+                            printf("pc: %d\n", pc);
+                            printf("stack pointer: %d\n", sp);
+                            printf("Stimer: %d\n", ST);
+                            printf("Dtimer: %d\n", DT);
+                            break;
+                        case KEY_HALT:
                             // Halt
                             running = 0;
                             break;
@@ -224,11 +238,13 @@ main(int argc, char* argv[]) {
             }
             if (!running) break;
         }
-        if (paused && space_pressed) cinst = 1;
+        if (paused && next_opcode) cinst = 1;
         for (ii = 0; ii < cinst; ii++) {
         if (paused) cinst = 0;
         // It looks better without identation
-        if (pc >= 4096) break;
+        if (pc >= 4096) {
+            break;
+        }
         opcode = dopcode;
         inst   = opcode & 0xF000;
         if (opcode != 0x0 && debug) {
@@ -333,6 +349,7 @@ main(int argc, char* argv[]) {
                 pc = NNN + V[0x0];
                 break;
             case 0xC000:
+                srand(time(NULL));
                 V[X] = R & KK;
                 break;
             case 0xD000:
@@ -345,32 +362,23 @@ main(int argc, char* argv[]) {
                         px = ((V[X] + x) % 64);
                         color = (memory[I + y] >> (7 - x)) & 1;
                         ccolor = gfx[py][px];
-                        if (color == ccolor == 1)
-                            V[0xF] = 1;
+                        if (color && ccolor) V[0xF] = 1;
                         color ^= ccolor;
                         gfx[py][px] = color;
-                        if (color) {
-                            boxRGBA(screen,
-                                    DX,
-                                    DY,
-                                    DX + SCALE,
-                                    DY + SCALE,
-                                    0,
-                                    255,
-                                    0,
-                                    255);
-                        }
-                        else {
-                            boxRGBA(screen,
-                                    DX,
-                                    DY,
-                                    DX + SCALE,
-                                    DY + SCALE,
-                                    0,
-                                    0,
-                                    0,
-                                    255);
-                        }
+                        bounds.x = DX;
+                        bounds.y = DY;
+                        bounds.w = SCALE;
+                        bounds.h = SCALE;
+                        if (color)
+                            SDL_FillRect(screen,
+                                         &bounds,
+                                         SDL_MapRGB(screen->format,
+                                                    COLOR_ON));
+                        else
+                            SDL_FillRect(screen,
+                                         &bounds,
+                                         SDL_MapRGB(screen->format,
+                                                    COLOR_OFF));
                     }
                 }
                 SDL_Flip(screen);
@@ -447,7 +455,7 @@ main(int argc, char* argv[]) {
             if (!ST) beep();
         }
         }
-        SDL_Delay(10);
+        SDL_Delay(15);
     }
     SDL_Quit();
 }
