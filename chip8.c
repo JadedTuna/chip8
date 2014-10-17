@@ -15,15 +15,15 @@
 #define SCALE   5
 #define WIDTH   64
 #define HEIGHT  32
-#define INST_PER_CYCLE 10
+#define INST_PER_CYCLE 5
 
 unsigned char memory[4096];
 char gfx[32][64];
 int pc = 0x200;
 unsigned int I = 0;
 unsigned char V[16];
-int opcode, inst, kk, x, y, ix, iy, h, px, py, i, temp;
-char color, ccolor, running;
+int opcode, inst, kk, x, y, px, py, i, ii, temp, cinst;
+char color, ccolor, running, paused, debug, space_pressed;
 unsigned char sp;
 int DT, ST;
 int stack[16];
@@ -55,7 +55,7 @@ main(int argc, char* argv[]) {
         exit(-1);
     }
     SDL_Event event;
-    SDL_WM_SetCaption("CHIP8 emulator", 0);
+    SDL_WM_SetCaption("CHIP8 emulator - running", 0);
     SDL_EnableUNICODE(1);
     
     FILE* fp = fopen(argv[1], "rb");
@@ -69,6 +69,8 @@ main(int argc, char* argv[]) {
     running = 1;
     char* keyname;
     char chr;
+    char* key;
+    cinst = INST_PER_CYCLE;
     for (;;) {
         if (SDL_PollEvent(&event)) {
             switch (event.type) {
@@ -76,7 +78,19 @@ main(int argc, char* argv[]) {
                     running = 0;
                     break;
                 case (SDL_KEYDOWN):
-                    chr = SDL_GetKeyName(event.key.keysym.sym)[0];
+                    key = SDL_GetKeyName(event.key.keysym.sym);
+                    if (strlen(key) > 1) {
+                        if (!strcmp(key, "space")) {
+                            // Next instruction
+                            if (paused) {
+                                space_pressed = 1;
+                                SDL_Delay(250); /* Incase you want to 
+                                    execute just one opcode */
+                            }
+                        }
+                        break;
+                    }
+                    chr = key[0];
                     switch(chr) {
                         case '1':
                         case '2':
@@ -126,7 +140,18 @@ main(int argc, char* argv[]) {
                     }
                     break;
                 case (SDL_KEYUP):
-                    chr = SDL_GetKeyName(event.key.keysym.sym)[0];
+                    key = SDL_GetKeyName(event.key.keysym.sym);
+                    if (strlen(key) > 1) {
+                        if (!strcmp(key, "space")) {
+                            // Next instruction
+                            if (paused) {
+                                space_pressed = 0;
+                                SDL_Delay(2);
+                            }
+                        }
+                        break;
+                    }
+                    chr = key[0];
                     switch(chr) {
                         case '1':
                         case '2':
@@ -172,16 +197,42 @@ main(int argc, char* argv[]) {
                         case 'v':
                             keys[15] = 0;
                             break;
+                        case 'p':
+                            // Pause
+                            paused = !paused;
+                            if (paused) {
+                                SDL_WM_SetCaption(
+                                    "CHIP8 emulator - paused", 0);
+                                cinst = 0;
+                            }
+                            else {
+                                SDL_WM_SetCaption(
+                                    "CHIP8 emulator - running", 0);
+                                cinst = INST_PER_CYCLE;
+                            }
+                            break;
+                        case 'b':
+                            // Debug
+                            debug = !debug;
+                            break;
+                        case 'h':
+                            // Halt
+                            running = 0;
+                            break;
                     }
                     break;
             }
             if (!running) break;
         }
+        if (paused && space_pressed) cinst = 1;
+        for (ii = 0; ii < cinst; ii++) {
+        if (paused) cinst = 0;
+        // It looks better without identation
         if (pc >= 4096) break;
         opcode = dopcode;
         inst   = opcode & 0xF000;
-        if (opcode != 0x0) {
-            //printf("0x%X\n", opcode);
+        if (opcode != 0x0 && debug) {
+            printf("0x%X (%d): 0x%X\n", pc, pc, opcode);
         }
         pc += 2;
         switch(inst) {
@@ -287,15 +338,12 @@ main(int argc, char* argv[]) {
             case 0xD000:
                 // Das drawing!
                 V[0xF] = 0;
-                x = V[X];
-                y = V[Y];
-                h = N;
                 px = py = 0;
-                for (iy=0; iy < h; iy++) {
-                    py = ((y + iy) % 32);
-                    for (ix=0; ix < 8; ix++) {
-                        px = ((x + ix) % 64);
-                        color = (memory[I + iy] >> (7 - ix)) & 1;
+                for (y=0; y < N; y++) {
+                    py = ((V[Y] + y) % 32);
+                    for (x=0; x < 8; x++) {
+                        px = ((V[X] + x) % 64);
+                        color = (memory[I + y] >> (7 - x)) & 1;
                         ccolor = gfx[py][px];
                         if (color == ccolor == 1)
                             V[0xF] = 1;
@@ -391,7 +439,6 @@ main(int argc, char* argv[]) {
                 printf("Unknown opcode: 0x%X\n", opcode);
                 break;
         }
-        SDL_Delay(1);
         if (DT > 0) {
             DT--;
         }
@@ -399,6 +446,8 @@ main(int argc, char* argv[]) {
             ST--;
             if (!ST) beep();
         }
+        }
+        SDL_Delay(10);
     }
     SDL_Quit();
 }
