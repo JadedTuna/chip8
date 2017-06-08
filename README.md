@@ -1,11 +1,11 @@
 Chip8
 =====
 
-CHIP 8 emulator written in C.
+Pretty basic CHIP 8 emulator written in C.
 
 Instructions
 ============
-You need SDL library to run this program. Compile emulator using `gcc -lSDL chip8.c -o chip8`.
+You need SDL library to run this program. Compile emulator using `gcc chip8.c -o chip8 -lSDL`.
 
 Key bindings
 ============
@@ -25,4 +25,4 @@ Chip8 was using hex keyboard, which isn't available now. Instead use 1-4, q-r, a
 
 Bugs & problems
 ===============
-Please report any bugs & problems in the issues section! This will help me improve the emulator
+Please report any bugs & problems in the issues section! This will help me improve the emulator.

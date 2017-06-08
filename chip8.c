@@ -7,7 +7,7 @@
 
 void load_rom(FILE* fp, int start) {
     int c, i;
-    for (; (c = fgetc(fp)) != EOF; i++) {
+    for (i=0; (c = fgetc(fp)) != EOF; i++) {
         memory[i + start] = c;
     }
 }
@@ -17,7 +17,7 @@ void beep() {
         printf("BEEP!\n");
 }
 
-main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) {
     /* Parse command line arguments */
     if (argc != 2) {
         fprintf(stderr, "usage: chip8 ROM\n");
@@ -72,19 +72,18 @@ main(int argc, char* argv[]) {
                     if (strlen(key) > 1) break;
                     chr = key[0];
                     switch(chr) {
-                        case KEY_1:
+                        case KEY_0:
                             keys[0] = 1;
                             break;
-                        case KEY_2:
+                        case KEY_1:
                             keys[1] = 1;
                             break;
-                        case KEY_3:
+                        case KEY_2:
                             keys[2] = 1;
                             break;
-                        case KEY_C:
+                        case KEY_3:
                             keys[3] = 1;
                             break;
-                            
                         case KEY_4:
                             keys[4] = 1;
                             break;
@@ -94,31 +93,30 @@ main(int argc, char* argv[]) {
                         case KEY_6:
                             keys[6] = 1;
                             break;
-                        case KEY_D:
+                        case KEY_7:
                             keys[7] = 1;
                             break;
-                            
-                        case KEY_7:
+                        case KEY_8:
                             keys[8] = 1;
                             break;
-                        case KEY_8:
-                            keys[9] = 1;
-                            break;
                         case KEY_9:
-                            keys[10] = 1;
-                            break;
-                        case KEY_E:
-                            keys[11] = 1;
+                            keys[9] = 1;
                             break;
                             
                         case KEY_A:
-                            keys[12] = 1;
-                            break;
-                        case KEY_0:
-                            keys[13] = 1;
+                            keys[10] = 1;
                             break;
                         case KEY_B:
+                            keys[11] = 1;
+                            break;
+                        case KEY_C:
+                            keys[12] = 1;
+                            break;
+                        case KEY_E:
                             keys[14] = 1;
+                            break;
+                        case KEY_D:
+                            keys[13] = 1;
                             break;
                         case KEY_F:
                             keys[15] = 1;
@@ -134,19 +132,18 @@ main(int argc, char* argv[]) {
                     if (strlen(key) > 1) break;
                     chr = key[0];
                     switch(chr) {
-                        case KEY_1:
+                        case KEY_0:
                             keys[0] = 0;
                             break;
-                        case KEY_2:
+                        case KEY_1:
                             keys[1] = 0;
                             break;
-                        case KEY_3:
+                        case KEY_2:
                             keys[2] = 0;
                             break;
-                        case KEY_C:
+                        case KEY_3:
                             keys[3] = 0;
                             break;
-                            
                         case KEY_4:
                             keys[4] = 0;
                             break;
@@ -156,31 +153,30 @@ main(int argc, char* argv[]) {
                         case KEY_6:
                             keys[6] = 0;
                             break;
-                        case KEY_D:
+                        case KEY_7:
                             keys[7] = 0;
                             break;
-                            
-                        case KEY_7:
+                        case KEY_8:
                             keys[8] = 0;
                             break;
-                        case KEY_8:
-                            keys[9] = 0;
-                            break;
                         case KEY_9:
-                            keys[10] = 0;
-                            break;
-                        case KEY_E:
-                            keys[11] = 0;
+                            keys[9] = 0;
                             break;
                             
                         case KEY_A:
-                            keys[12] = 0;
-                            break;
-                        case KEY_0:
-                            keys[13] = 0;
+                            keys[10] = 0;
                             break;
                         case KEY_B:
+                            keys[11] = 0;
+                            break;
+                        case KEY_C:
+                            keys[12] = 0;
+                            break;
+                        case KEY_E:
                             keys[14] = 0;
+                            break;
+                        case KEY_D:
+                            keys[13] = 0;
                             break;
                         case KEY_F:
                             keys[15] = 0;
@@ -260,7 +256,12 @@ main(int argc, char* argv[]) {
                                 gfx[y][x] = 0;
                             }
                         }
-                        boxRGBA(screen, 0, 0, SX, SY, 0, 0, 0, 255);
+                        bounds.x = 0;
+                        bounds.y = 0;
+                        bounds.w = SX;
+                        bounds.h = SY;
+                        SDL_FillRect(screen, &bounds,
+                                    SDL_MapRGB(screen->format, COLOR_OFF));
                         SDL_Flip(screen);
                         break;
                     case 0x00EE:
@@ -345,7 +346,7 @@ main(int argc, char* argv[]) {
             case 0xA000:
                 I = NNN;
                 break;
-            case 0xBa000:
+            case 0xB000:
                 pc = NNN + V[0x0];
                 break;
             case 0xC000:
